@@ -1,0 +1,119 @@
+#!/usr/bin/env ruby
+
+require "json"
+require "base64"
+
+# Defines the Szpm package. If you need to update some metadata, do it there
+class Szpm
+  def name
+    "OVH SMS"
+  end
+
+  def version
+    "0.1.0"
+  end
+
+  def vendor
+    "FullSave"
+  end
+
+  def license
+    "GPLv3"
+  end
+
+  def url
+    "https://www.fullsave.com/"
+  end
+
+  def buildhost
+    nil
+  end
+
+  def builddate
+    Time.now.utc
+  end
+
+  def change_log
+    []
+  end
+
+  def description
+    "Add SMS notification support for OVH provider"
+  end
+
+  # File map to be imported into Zammad
+  # Set the source file as key and the destination in Zammad app as value
+  def files
+    {
+      "src/ovh.rb" => "app/models/channel/driver/sms/ovh.rb"
+    }
+  end
+end
+
+# Holds logic for building szpm file given a definition
+class SzpmBuilder
+  def initialize(output_directory = ".", szpm = Szpm.new)
+    @output_directory = output_directory
+    @szpm = szpm
+  end
+
+  # Creates the .szpm file and writes content to it.
+  # This will overwrite the file if it already exists !
+  def build
+    file_path = File.join(@output_directory, "ovh-sms.szpm")
+
+    puts "Start building szpm file to #{file_path}..."
+
+    File.open(file_path, "w") do |file|
+      file.write(JSON.pretty_generate(structure))
+    end
+
+    puts "Done"
+  end
+
+  def structure
+    szpm = Szpm.new
+    attributes = %i[
+      name
+      version
+      vendor
+      license
+      url
+      buildhost
+      builddate
+      change_log
+    ]
+    result = attributes.each.with_object({}) do |attribute, hash|
+      hash[attribute] = @szpm.public_send(attribute)
+    end
+
+    result[:description] = build_description
+    result[:files] = build_files
+    result.compact
+  end
+
+  private
+
+  def build_description
+    [
+      {
+        language: "en",
+        text: @szpm.description
+      }
+    ]
+  end
+
+  def build_files
+    @szpm.files.each.with_object([]) do |(source, destination), array|
+      array << {
+        location: destination,
+        permission: 644,
+        encode: "base64",
+        content: Base64.strict_encode64(File.read(source))
+      }
+    end
+  end
+end
+
+builder = SzpmBuilder.new
+builder.build
